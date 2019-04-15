@@ -67,7 +67,7 @@ names(X) = paste("X", format(as.Date(substring(names(X), 2), "%Y.%m.%d")-15, "%Y
 names(X.train) = paste("X.train", format(as.Date(substring(names(X.train), 2), "%Y.%m.%d")-15, "%Y.%m.%d"), sep="") # replace time
 
 # cut to analogue selection periods
-X.ctl.cut = extract.period.RB(RB = X, years = 340:1321, months = 1:12)
+X.ctl.cut = extract.period.RB(RB = X.train, years = 340:1321, months = 1:12)
 X.2x.cut = extract.period.RB(RB = X, years = 1942:2923, months = 1:12)
 
 # For Apples to Apples Comparison
