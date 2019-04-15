@@ -20,25 +20,28 @@ extract.years.from.ts <- function(ts, years) {
 }
 
 
-period.mean.ts <- function(ts, years, months = "annual", FUN=mean, na.rm = T) {
+period.mean.ts <- function(ts, years, months = "annual", fun=mean, na.rm = T) {
   # 1. extract relevant period from time series:
   period.ts = extract.years.from.ts(ts = ts, years = years)
   # 2. extract relevant months:
   if (months[1] == "annual") {
-    return(apply.yearly(x = period.ts, FUN = FUN, na.rm=na.rm))
+    return(apply.yearly(x = period.ts, FUN = fun, na.rm=na.rm))
   } else {
-    period.ts.monthly = apply.monthly(period.ts, FUN=mean)
-    if (months[1] == "DJF" | months[1] == "NDJFM" | months[1] == "ONDJFMA") {
+    period.ts.monthly = apply.monthly(period.ts, FUN=fun)
+    if (months[1] == "DJF" | months[1] == "NDJFM" | months[1] == "ONDJFMA" | months[1] == "NDJFMA") {
       if (months[1] == "DJF") cur.months = c(12, 1, 2)
       if (months[1] == "NDJFM") cur.months = c(11, 12, 1, 2, 3)
+      if (months[1] == "NDJFMA") cur.months = c(11, 12, 1, 2, 3, 4)
       if (months[1] == "ONDJFMA") cur.months = c(10, 11, 12, 1, 2, 3, 4)
+      period.ts = extract.years.from.ts(ts = ts, years = c(years[1]-1, years))
+      period.ts.monthly = apply.monthly(period.ts, FUN=fun)
       cur.ts = extract.months.from.ts(ts = period.ts.monthly, months = cur.months)
-      ann.mean.ts = apply.yearly(xts(as.numeric(cur.ts), order.by = as.Date(time(cur.ts)) + 180), FUN=mean, na.rm=na.rm) # change time stamp to +6months and apply.yearly
+      ann.mean.ts = apply.yearly(extract.years.from.ts(xts(as.numeric(cur.ts), order.by = as.Date(time(cur.ts)) + 180), years = years), FUN=fun, na.rm=na.rm) # change time stamp to +6months and apply.yearly
       ret.ts = xts(as.numeric(ann.mean.ts), order.by = as.Date(time(ann.mean.ts))-180) # # change time stemp backwards to -6months
       return(ret.ts)
     } else {
       cur.ts = extract.months.from.ts(ts = period.ts.monthly, months = months)
-      return(apply.yearly(cur.ts, FUN=mean, na.rm = na.rm))
+      return(apply.yearly(cur.ts, FUN=fun, na.rm = na.rm))
     }
   }
 }

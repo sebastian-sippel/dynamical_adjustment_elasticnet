@@ -106,7 +106,9 @@ detrend.EOF.RB <- function(cr, freq = "daily", filt = 3, alpha = 1, degree = 1, 
 
 
 
-
+extract.date.RB <- function(RB) {
+  return(as.Date(substring(text = names(RB), first = 2, last = 11), format = "%Y.%m.%d"))
+}
 
 
 # -----------------------------------------------------------

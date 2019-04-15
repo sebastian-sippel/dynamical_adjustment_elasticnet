@@ -151,11 +151,6 @@ train.dyn.adj.elastnet.annual.RB <- function(Y.RB, X.RB, X.RB.train = NULL,
   
   return(Yhat.RB)
 }
-  
-
-
-
-
 
 
 

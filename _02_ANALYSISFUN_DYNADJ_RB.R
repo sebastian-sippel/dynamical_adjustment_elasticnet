@@ -32,7 +32,7 @@ fldmean.RB <- function(RB, w = "area", mask = NULL, maskvalue = NA, ret.xts = T)
   if (!is.null(mask)) RB = mask(RB, mask = mask, maskvalue = maskvalue)
   
   RB.values = values(RB)
-  area.vec = values(area(RB))
+  area.vec = values(raster::area(RB))
   
   if (w == "area") {
     RB.mean.ts = apply(X = RB.values, MARGIN = 2, FUN=function(x) {

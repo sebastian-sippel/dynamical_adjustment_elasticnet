@@ -38,9 +38,9 @@ require(ncdf4)
 #' @author Sebastian Sippel
 #' @examples
 train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq = NULL, 
-                                          train.years = NULL, train.months = 1:12, add.mon = 2,
-                                          alpha = 1, nfolds = 10, ret.cv.model=F, s = "lambda.min",
-                                          lags.to.aggregate = list(1:2, 3:7, c(8:30)), n.pc = 10) {
+                                          train.years = NULL, train.months = 1:12, add.mon = 2, lambda.min.ratio = NULL,
+                                          alpha = 1, nfolds = 10, ret.cv.model=F, s = "lambda.min", 
+                                          lags.to.aggregate = list(1:2, 3:7, c(8:30)), n.pc = 10, cv.parallel = F, family = "gaussian") {
   
   ## (0) SANITY CHECKS AND TRANSFORMATION ON INPUT DATA:
   ## ---------------------------------------------------
@@ -65,7 +65,11 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
     # na.idx.col = apply(X = X, MARGIN=2, FUN=function(x) all(is.na(x)))
     # if( any(na.idx.col) ) X = X[,!na.idx.col]
     
-    if (train.months[1] == "seasonal") train.months = c(1, 4, 7, 10)
+    train.seasonal = F
+    if (train.months[1] == "seasonal") {
+      train.months = c(1, 4, 7, 10)
+      train.seasonal = T
+    }
   }
   
   
@@ -91,7 +95,7 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
   Yhat = rep(NA, length(X.date.seq)) # xts(x = NULL, order.by = time(Y.train))
   
   for (i in train.months) {
-    # print(i)
+    print(i)
     
     ## TRAINING IDX:
     cur.mon = (i-add.mon):(i+add.mon)
@@ -111,21 +115,40 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
     
 
     ## (2.1) GLMNET TRAINING BASED ON CROSS-VALIDATION:
-    crossclass = c(rep.row(x = 1:nfolds, n = ceiling(length(Y.train.idx)/10)))[1:length(Y.train.idx)]
+    crossclass = c(rep.row(x = 1:nfolds, n = ceiling(length(Y.train.idx)/nfolds)))[1:length(Y.train.idx)]
+    if(is.null(lambda.min.ratio) & is.null(X.train)) lambda.min.ratio = ifelse(length(Y.train[Y.train.idx]) < c(dim(X[Y.train.idx,])[2]),0.01,0.0001)
+    if(is.null(lambda.min.ratio) & !is.null(X.train)) lambda.min.ratio = ifelse(length(Y.train[Y.train.idx]) < c(dim(X.train[Y.train.idx,])[2]),0.01,0.0001)
     
     if (is.null(X.train)) {
-      cur.glmnet[[i]] = cv.glmnet(x = X[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), nfolds = nfolds, foldid = crossclass, alpha = alpha)
+      glmnet.control(fdev=0, devmax=1, mnlam = 100)
+      # lambda.seq = glmnet(x = X[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), alpha = alpha, lambda = NULL, lambda.min.ratio = lambda.min.ratio)$lambda  # forces glmnet to compute the full lambda sequence! -> https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
+      # penalty.factor = rep(1, dim(X)[2])
+      # set penalty.factor to 0 for EOF's:
+      # penalty.factor[(dim(X)[2]-n.pc+1)]
+      cur.glmnet[[i]] = cv.glmnet(x = X[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), family = family, nfolds = nfolds, foldid = crossclass, alpha = alpha, keep = T, parallel = cv.parallel)
+      cur.glmnet[[i]]$Y = as.numeric(Y.train[Y.train.idx])
+      
+      # IMPLEMENT SINGLE-INDEX model here:
+      # y.train.pred = cur.glmnet[[i]]$fit.preval[,which(cur.glmnet[[i]]$lambda == cur.glmnet[[i]]$lambda.min)]  # y.train.pred
+      # y.train.obs = as.numeric(Y.train[Y.train.idx])
+      # cor(y.train.pred, y.train.obs)
+      # loess.model = loess(y.train.obs ~ y.train.pred, span = 1, degree=1) 
+      # cor(y.train.obs, predict(object = loess.model, newdata = y.train.pred))
     } else {
-      cur.glmnet[[i]] = cv.glmnet(x = X.train[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), nfolds = nfolds, foldid = crossclass, alpha = alpha)
+      # lambda.seq = glmnet(x = X.train[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), alpha = alpha, lambda = NULL, lambda.min.ratio = lambda.min.ratio)$lambda # forces glmnet to compute the full lambda sequence! (instead of stopping when %dev is low) -> https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
+      glmnet.control(fdev=0, devmax=1, mnlam = 100)
+      cur.glmnet[[i]] = cv.glmnet(x = X.train[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), family = family, nfolds = nfolds, foldid = crossclass, alpha = alpha, keep=T, parallel = cv.parallel)
+      cur.glmnet[[i]]$Y = as.numeric(Y.train[Y.train.idx])
     }
     
     ## (2.2) PREDICTION STEP FOR RESPECTIVE MONTH:
-    if ( all(train.months == c(1, 4, 7, 10)) ) {   # "SEASONAL" PREDICTION
+    if ( train.seasonal == T) {   # "SEASONAL" PREDICTION
       X.pred.idx = which(as.numeric(format(X.date.seq, "%m")) %in% cur.mon)    ## PREDICTION IDX: idx to fill with predicted value in X
     } else {
       X.pred.idx = which(as.numeric(format(X.date.seq, "%m")) == i)    ## PREDICTION IDX: idx to fill with predicted value in X
     }
     Yhat[X.pred.idx] = predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s)  
+    if (family == "binomial") Yhat[X.pred.idx] = predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s, type="class")  
   }
   
   
