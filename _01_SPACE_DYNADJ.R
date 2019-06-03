@@ -38,7 +38,8 @@ registerDoParallel(cores = 44)
 train.dyn.adj.elastnet.annual.RB <- function(Y.RB, X.RB, X.RB.train = NULL, 
                                                     train.years = NULL, train.months = 1:12, add.mon = 2,
                                                     alpha = 0.2, nfolds = 10, s = "lambda.min", 
-                                                    lags.to.aggregate = list(1:2, 3:7, c(8:30)), n.pc = 10, nr.cores = 46) {
+                                                    lags.to.aggregate = list(1:2, 3:7, c(8:30)), n.pc = 10, EOF.penalty = 1, single.index.mod = NULL, keep = F,
+                                             nr.cores = 46, x.domain = 15, y.domain = 15) {
   
   # (1) Subset relevant years for Y in training sample and KICK out NA grid cells:
   # -----------------------------------------------
@@ -108,7 +109,7 @@ train.dyn.adj.elastnet.annual.RB <- function(Y.RB, X.RB, X.RB.train = NULL,
     }
     
     # (b) Subset/Define new raster based on present data point:
-    cur.extent = extent(c(Y.RB.coord.nona[i,1] - 15, Y.RB.coord.nona[i,1] + 15, Y.RB.coord.nona[i,2] - 15, Y.RB.coord.nona[i,2] + 15))
+    cur.extent = extent(c(Y.RB.coord.nona[i,1] - x.domain, Y.RB.coord.nona[i,1] + x.domain, Y.RB.coord.nona[i,2] - y.domain, Y.RB.coord.nona[i,2] + y.domain))
     cur.X.idx = values(crop(X.template, cur.extent))
     cur.X.RB = X[,cur.X.idx]
     cur.Xtrain = NULL
@@ -123,7 +124,8 @@ train.dyn.adj.elastnet.annual.RB <- function(Y.RB, X.RB, X.RB.train = NULL,
     Yhat = train.dyn.adj.elastnet.annual(Y.train = xts(Y[,i], order.by = Y.RB.date), X = cur.X.RB, X.train = cur.Xtrain, X.date.seq = NULL, 
                                          train.years = train.years, train.months = train.months, add.mon = add.mon, 
                                          alpha = alpha, nfolds = nfolds, ret.cv.model=F, s = s,
-                                         lags.to.aggregate = lags.to.aggregate, n.pc = n.pc)
+                                         lags.to.aggregate = lags.to.aggregate, n.pc = n.pc, EOF.penalty = EOF.penalty, 
+                                         single.index.mod = single.index.mod, keep = keep)
     }, error = function(err) {
       print("ERROR HAS BEEN CAUGHT")
       Yhat = rep(NA, dim(cur.X.RB)[1])

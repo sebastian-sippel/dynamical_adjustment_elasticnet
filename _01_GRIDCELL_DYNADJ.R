@@ -40,7 +40,7 @@ require(ncdf4)
 train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq = NULL, 
                                           train.years = NULL, train.months = 1:12, add.mon = 2, lambda.min.ratio = NULL,
                                           alpha = 1, nfolds = 10, ret.cv.model=F, s = "lambda.min", 
-                                          lags.to.aggregate = list(1:2, 3:7, c(8:30)), n.pc = 10, cv.parallel = F, family = "gaussian") {
+                                          lags.to.aggregate = list(1:2, 3:7, c(8:30)), n.pc = 10, EOF.penalty = 1, cv.parallel = F, family = "gaussian", single.index.mod = NULL, keep = F) {
   
   ## (0) SANITY CHECKS AND TRANSFORMATION ON INPUT DATA:
   ## ---------------------------------------------------
@@ -121,27 +121,41 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
     
     if (is.null(X.train)) {
       glmnet.control(fdev=0, devmax=1, mnlam = 100)
-      # lambda.seq = glmnet(x = X[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), alpha = alpha, lambda = NULL, lambda.min.ratio = lambda.min.ratio)$lambda  # forces glmnet to compute the full lambda sequence! -> https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
-      # penalty.factor = rep(1, dim(X)[2])
-      # set penalty.factor to 0 for EOF's:
-      # penalty.factor[(dim(X)[2]-n.pc+1)]
-      cur.glmnet[[i]] = cv.glmnet(x = X[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), family = family, nfolds = nfolds, foldid = crossclass, alpha = alpha, keep = T, parallel = cv.parallel)
-      cur.glmnet[[i]]$Y = as.numeric(Y.train[Y.train.idx])
       
-      # IMPLEMENT SINGLE-INDEX model here:
-      # y.train.pred = cur.glmnet[[i]]$fit.preval[,which(cur.glmnet[[i]]$lambda == cur.glmnet[[i]]$lambda.min)]  # y.train.pred
-      # y.train.obs = as.numeric(Y.train[Y.train.idx])
-      # cor(y.train.pred, y.train.obs)
-      # loess.model = loess(y.train.obs ~ y.train.pred, span = 1, degree=1) 
-      # cor(y.train.obs, predict(object = loess.model, newdata = y.train.pred))
+      # set penalty.factor to X for lagged EOF's:
+      penalty.factor = rep(1, dim(X)[2])
+      penalty.factor[(length(penalty.factor)-length(lags.to.aggregate) * n.pc + 1):length(penalty.factor)] = EOF.penalty
+      
+      cur.glmnet[[i]] = cv.glmnet(x = X[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), family = family, nfolds = nfolds, foldid = crossclass, alpha = alpha, parallel = cv.parallel, penalty.factor = penalty.factor, keep = keep)
+      cur.glmnet[[i]]$Y = as.numeric(Y.train[Y.train.idx])
     } else {
-      # lambda.seq = glmnet(x = X.train[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), alpha = alpha, lambda = NULL, lambda.min.ratio = lambda.min.ratio)$lambda # forces glmnet to compute the full lambda sequence! (instead of stopping when %dev is low) -> https://web.stanford.edu/~hastie/glmnet/glmnet_alpha.html
       glmnet.control(fdev=0, devmax=1, mnlam = 100)
-      cur.glmnet[[i]] = cv.glmnet(x = X.train[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), family = family, nfolds = nfolds, foldid = crossclass, alpha = alpha, keep=T, parallel = cv.parallel)
+      
+      # set penalty.factor to X for lagged EOF's:
+      penalty.factor = rep(1, dim(X)[2])
+      penalty.factor[(length(penalty.factor)-length(lags.to.aggregate) * n.pc + 1):length(penalty.factor)] = EOF.penalty
+      
+      cur.glmnet[[i]] = cv.glmnet(x = X.train[Y.train.idx,], y = as.numeric(Y.train[Y.train.idx]), family = family, nfolds = nfolds, foldid = crossclass, alpha = alpha, parallel = cv.parallel, penalty.factor = penalty.factor, keep = keep)
       cur.glmnet[[i]]$Y = as.numeric(Y.train[Y.train.idx])
     }
     
-    ## (2.2) PREDICTION STEP FOR RESPECTIVE MONTH:
+    ## (2.2) If Applicable: LOWESS SMOTHER:
+      yhat_train = predict.cv.glmnet(cur.glmnet[[i]], newx = X[Y.train.idx,], s = s)  
+    if (!is.null(single.index.mod) & !all(diff(yhat_train) == 0))  {
+      print(" Training of LOWESS smoother in single index model")
+      
+      # plot(yhat_train, as.numeric(Y.train[Y.train.idx]))    # very non-linear surface... 
+      # cor(yhat_train, as.numeric(Y.train[Y.train.idx])) ^ 2
+      lowess.smooth.mod = loess( as.numeric(Y.train[Y.train.idx]) ~ yhat_train, family = "gaussian", span = single.index.mod$span, alpha = single.index.mod$alpha,
+                                 control = loess.control(surface = c("direct"), statistics = c("approximate"), trace.hat = c("approximate")))
+      
+      # yhat_hat = predict(object = lowess.smooth.mod, newdata = yhat_train)
+      # plot(yhat_hat, as.numeric(Y.train[Y.train.idx]))
+      # cor(yhat_hat, as.numeric(Y.train[Y.train.idx])) ^ 2
+    }
+    
+    
+    ## (2.3) PREDICTION STEP FOR RESPECTIVE MONTH:
     if ( train.seasonal == T) {   # "SEASONAL" PREDICTION
       X.pred.idx = which(as.numeric(format(X.date.seq, "%m")) %in% cur.mon)    ## PREDICTION IDX: idx to fill with predicted value in X
     } else {
@@ -149,7 +163,12 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
     }
     Yhat[X.pred.idx] = predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s)  
     if (family == "binomial") Yhat[X.pred.idx] = predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s, type="class")  
+    if (!is.null(single.index.mod)) Yhat_loess = predict(object = lowess.smooth.mod, newdata = Yhat)
+    if (keep == T) Yhat[X.pred.idx] = cur.glmnet[[i]]$fit.preval[match(X.pred.idx, table = Y.train.idx),which(cur.glmnet[[i]]$lambda == cur.glmnet[[i]][[s]])] # predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s)  
   }
+  
+  
+  
   
   
   ## (3) Return different quantities:
@@ -157,6 +176,7 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
   if (ret.cv.model) return(cur.glmnet)
   
   Yhat.xts = xts(x = Yhat, order.by = X.date.seq)
+  if (!is.null(single.index.mod)) Yhat.xts = xts(x = Yhat_loess, order.by = X.date.seq)
   return(Yhat.xts)
 }
 
@@ -204,5 +224,14 @@ add.lag.predictors <- function(X, X.train = NULL, svd.idx = NULL, lags.to.aggreg
     return(list(X = cbind(X, X.lag), X.train = cbind(X.train, X.train.lag)))
   }
 }
+
+
+
+
+
+
+
+
+
 
 
