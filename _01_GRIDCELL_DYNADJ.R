@@ -139,14 +139,16 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
       cur.glmnet[[i]]$Y = as.numeric(Y.train[Y.train.idx])
     }
     
-    ## (2.2) If Applicable: LOWESS SMOTHER:
-      yhat_train = predict.cv.glmnet(cur.glmnet[[i]], newx = X[Y.train.idx,], s = s)  
+    ## (2.2) If Applicable: LOWESS SMOOTHER:
+      yhat_train = predict(object=cur.glmnet[[i]], newx = X[Y.train.idx,], s = s)
+      # predict(cur.glmnet[[i]], newx = X[Y.train.idx,], s = s)
+      
     if (!is.null(single.index.mod) & !all(diff(yhat_train) == 0))  {
       print(" Training of LOWESS smoother in single index model")
       
       # plot(yhat_train, as.numeric(Y.train[Y.train.idx]))    # very non-linear surface... 
       # cor(yhat_train, as.numeric(Y.train[Y.train.idx])) ^ 2
-      lowess.smooth.mod = loess( as.numeric(Y.train[Y.train.idx]) ~ yhat_train, family = "gaussian", span = single.index.mod$span, alpha = single.index.mod$alpha,
+      lowess.smooth.mod = loess( formula = as.numeric(Y.train[Y.train.idx]) ~ yhat_train, family = "gaussian", span = single.index.mod$span, alpha = single.index.mod$alpha,
                                  control = loess.control(surface = c("direct"), statistics = c("approximate"), trace.hat = c("approximate")))
       
       # yhat_hat = predict(object = lowess.smooth.mod, newdata = yhat_train)
@@ -161,14 +163,11 @@ train.dyn.adj.elastnet.annual <- function(Y.train, X, X.train = NULL, X.date.seq
     } else {
       X.pred.idx = which(as.numeric(format(X.date.seq, "%m")) == i)    ## PREDICTION IDX: idx to fill with predicted value in X
     }
-    Yhat[X.pred.idx] = predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s)  
-    if (family == "binomial") Yhat[X.pred.idx] = predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s, type="class")  
+    Yhat[X.pred.idx] = predict(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s)  
+    if (family == "binomial") Yhat[X.pred.idx] = predict(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s, type="class")  
     if (!is.null(single.index.mod)) Yhat_loess = predict(object = lowess.smooth.mod, newdata = Yhat)
     if (keep == T) Yhat[X.pred.idx] = cur.glmnet[[i]]$fit.preval[match(X.pred.idx, table = Y.train.idx),which(cur.glmnet[[i]]$lambda == cur.glmnet[[i]][[s]])] # predict.cv.glmnet(cur.glmnet[[i]], newx = X[X.pred.idx,], s = s)  
   }
-  
-  
-  
   
   
   ## (3) Return different quantities:
