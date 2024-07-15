@@ -10,17 +10,12 @@ happen again despite climate change? _Weather and Climate Dynamics_ (accepted), 
 
 Short summary of the functions in each script:
 
-"_00_preprocessing_4DYNADJ.R"   Function repository for preprocessing based on time series (xts) package in R for clean data handling.
-
-"_00_preprocessing_SPACETIME_4DYNADJ.R"   Function repository for preprocessing based on gridded files (time series xts and raster package) in R for clean data handling
-
-"_01_GRIDCELL_DYNADJ.R"   Function repository for Prediction step in dynamical adjustment based on the Elastic Net for univariate time series
-
-"_01_SPACE_DYNADJ.R"    Function repository for Prediction step in dynamical adjustment based on the Elastic Net for gridded time series (based on raster package)
-
-"_02_ANALYSISFUN_DYNADJ.R"    Function repository for analysis functions based on time series (xts) package in R for univariate time series
-
-"_02_ANALYSISFUN_DYNADJ_RB.R"   Function repository for analysis functions for gridded time series (raster package)
+* _00_preprocessing_4DYNADJ.R: Function repository for preprocessing based on time series (xts) package in R for clean data handling.
+* _00_preprocessing_SPACETIME_4DYNADJ.R: Function repository for preprocessing based on gridded files (time series xts and raster package) in R for clean data handling
+* _01_GRIDCELL_DYNADJ.R: Function repository for Prediction step in dynamical adjustment based on the Elastic Net for univariate time series
+* _01_SPACE_DYNADJ.R: Function repository for Prediction step in dynamical adjustment based on the Elastic Net for gridded time series (based on raster package)
+* _02_ANALYSISFUN_DYNADJ.R: Function repository for analysis functions based on time series (xts) package in R for univariate time series
+* _02_ANALYSISFUN_DYNADJ_RB.R: Function repository for analysis functions for gridded time series (raster package)
 
 The script "_03_simple_test_script.R" implements a simple version (file paths need to be adjusted).
 The data files are available from: 
