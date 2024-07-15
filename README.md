@@ -1,6 +1,6 @@
 
-Sebastian Sippel
-24.10.2023
+**Sebastian Sippel
+15.07.2024**
 
 This is a code repository for dynamical adjustment, implementing the method presented in: 
 Sippel, S., Meinshausen, N., Merrifield, A., Lehner, F., Pendergrass, A. G., Fischer, E. M., and Knutti, R. (2019) Uncovering the forced climate response from a single ensemble member using statistical learning. _Journal of Climate_ **32**, 5677-5699, doi:10.1175/JCLI-D-18-0882.1.
